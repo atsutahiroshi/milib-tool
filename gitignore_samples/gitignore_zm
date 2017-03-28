@@ -1,0 +1,9 @@
+/app/deg2rad
+/app/le
+/app/pexp
+/app/psolve
+/app/rad2deg
+/app/seqmod
+/app/zm-config
+/config
+*.o

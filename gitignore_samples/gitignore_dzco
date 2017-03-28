@@ -1,0 +1,6 @@
+/app/dz_bode
+/app/dz_nyquist
+/app/dz_sim
+/app/dzco-config
+/config
+*.o

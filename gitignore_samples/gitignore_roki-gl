@@ -1,0 +1,7 @@
+/app/rk_anim
+/app/rk_pen
+/app/rk_seq
+/app/rk_view
+/app/rokigl-config
+/config
+*.o
