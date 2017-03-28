@@ -1,0 +1,17 @@
+How to use 'update.sh'
+
+Examples:
+When you create git repository of cure, type the following:
+ $ ./update.sh cure-1.0.0-beta3
+
+When you upgrade cure to ver. 1.0.0-beta4, type the following:
+ $ ./update.sh cure-1.0.0-beta4
+
+If you want to disable automatic commit, type the following:
+ $ AUTO_COMMIT=n ./update.sh cure-1.0.0-beta4
+
+When you upgrade to the latest version, type the following:
+ $ tail -n 1 versions/cure | xargs -n 1 ./update.sh
+
+When you create all the commit history, type the following:
+ $ cat versions/cure | xargs -n 1 ./update.sh
