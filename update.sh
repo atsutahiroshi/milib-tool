@@ -2,7 +2,7 @@
 
 # settings
 set -eu
-AUTO_COMMIT=y
+AUTO_COMMIT=${AUTO_COMMIT:-y}
 WORK_DIR=`pwd`
 
 # get path where this script exists
