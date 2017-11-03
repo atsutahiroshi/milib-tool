@@ -400,7 +400,7 @@ try_download() {
 try_dl_from_public() {
   local opts="--no-clobber"
   if [[ $VERBOSE_LEVEL -lt 2 ]]; then
-    opts=" --no-verbose"
+    opts="${opts} --no-verbose"
   fi
   local url=${PUBLIC_HOST}/${FULL_LIBNAME}.tgz
   local command="wget ${opts} -O ${OUTPUT_FILE} ${url}"
@@ -413,7 +413,7 @@ try_dl_from_wiki() {
   set_http_passwd
   local opts="--no-clobber"
   if [[ $VERBOSE_LEVEL -lt 2 ]]; then
-    opts=" --no-verbose"
+    opts="${opts} --no-verbose"
   fi
   opts="${opts} --http-user=${HTTP_USER}"
   opts="${opts} --http-passwd=${HTTP_PASSWD}"
