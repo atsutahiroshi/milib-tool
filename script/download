@@ -311,6 +311,7 @@ set_http_user() {
     return
   elif [[ -f "$PASSWD_FILE" ]]; then
     HTTP_USER=$(sed -n '1p' "$PASSWD_FILE")
+    verbose_message 2 "Fetched username from $PASSWD_FILE"
   fi
 }
 
@@ -319,54 +320,80 @@ set_http_passwd() {
     return
   elif [[ -f "$PASSWD_FILE" ]]; then
     HTTP_PASSWD=$(sed -n '2p' "$PASSWD_FILE")
+    verbose_message 2 "Fetched password from $PASSWD_FILE"
   fi
 }
 
 try_download_dry_run() {
-  "$@ --spider" &>/dev/null
+  local cmd="${@/wget/wget --spider}"
+  verbose_message 2 "Try to fake download: $cmd"
+  if [[ $VERBOSE_LEVEL -lt 2 ]]; then
+    "$cmd" &>/dev/null
+  else
+    "$cmd"
+  fi
   return $?
 }
 
 validate_file() {
-  tar -tzf $1 &>/dev/null
+  verbose_message 2 "Validating the downloaded file"
+  local cmd="tar -tzf $1"
+  if [[ $VERBOSE_LEVEL -lt 2 ]]; then
+    $cmd &>/dev/null
+  else
+    $cmd
+  fi
   return $?
 }
 
 try_download_execute() {
+  verbose_message 2 "Try to execute downloading: $@"
   if [[ -f ${OUTPUT_FILE} ]]; then
     message "${OUTPUT_FILE} is already exists"
     return 0
   else
-    "$@"
+    if [[ $VERBOSE_LEVEL -ge 1 ]]; then
+      "$@"
+    else
+      "$@" &>/dev/null
+    fi
     local ret=$?                # store the returned value
     if [[ $ret == 0 ]]; then
       if validate_file ${OUTPUT_FILE}; then
+        verbose_message 2 "${OUTPUT_FILE} was successfully downloaded"
         return 0
       else
         message "${OUTPUT_FILE} was not tarball"
         rm ${OUTPUT_FILE}
+        verbose_message 2 "${OUTPUT_FILE} was removed"
         return 1
       fi
-    else
-      # Since no $OUTPUT_FILE is guaranteed,
-      # the following command could be allowed.
-      rm -f ${OUTPUT_FILE}
-      return $ret
     fi
+    return $ret
   fi
 }
 
 try_download() {
+  local ret=
   if [[ $FLAG_DRY_RUN == TRUE ]]; then
     try_download_dry_run "$@"
   else
     try_download_execute "$@"
   fi
-  return $?
+  ret=$?
+  if [[ $ret -gt 0 ]]; then
+    # `wget` will generate 0byte file even if it failed downloading
+    # when providing -O option
+    rm -f ${OUTPUT_FILE}
+  fi
+  return $ret
 }
 
 try_dl_from_public() {
-  local opts="--no-verbose --no-clobber"
+  local opts="--no-clobber"
+  if [[ $VERBOSE_LEVEL -lt 2 ]]; then
+    opts=" --no-verbose"
+  fi
   local url=${PUBLIC_HOST}/${FULL_LIBNAME}.tgz
   local command="wget ${opts} -O ${OUTPUT_FILE} ${url}"
   try_download $command
@@ -376,7 +403,10 @@ try_dl_from_public() {
 try_dl_from_wiki() {
   set_http_user
   set_http_passwd
-  local opts="--no-verbose --no-clobber"
+  local opts="--no-clobber"
+  if [[ $VERBOSE_LEVEL -lt 2 ]]; then
+    opts=" --no-verbose"
+  fi
   opts="${opts} --http-user=${HTTP_USER}"
   opts="${opts} --http-passwd=${HTTP_PASSWD}"
   local page_name=$(find_wiki_page ${LIBNAME})
@@ -390,6 +420,8 @@ try_dl_from_wiki() {
 check_output_file() {
   OUTPUT_DIR=${OUTPUT_DIR:-.}
   OUTPUT_FILE=${OUTPUT_FILE:-${OUTPUT_DIR}/${FULL_LIBNAME}.tgz}
+  verbose_message 2 "OUTPUT_DIR=$OUTPUT_DIR"
+  verbose_message 2 "OUTPUT_FILE=$OUTPUT_FILE"
 }
 
 download() {
