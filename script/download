@@ -133,7 +133,7 @@ check_args() {
   done
 
   if [[ -z $GIVEN_LIBNAME ]]; then
-    echo "Please specify LIBNAME" >&2
+    error "Please specify LIBNAME"
     usage
     exit 1
   fi
