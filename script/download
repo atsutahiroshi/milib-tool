@@ -55,12 +55,15 @@ FLAG_DRY_RUN=FALSE
 HTTP_USER=
 HTTP_PASSWD=
 PASSWD_FILE="$SCRIPT_DIR/passwd"
-OUTPUT_DIR=
-OUTPUT_FILE=
+GIVEN_OUTPUT_DIR=
+GIVEN_OUTPUT_FILE=
 GIVEN_LIBNAME=
+GIVEN_LIBNAME_LIST=
 FULL_LIBNAME=
 LIBNAME=
 VERSION=
+OUTPUT_DIR=
+OUTPUT_FILE=
 LIBNAME_LIST="cure zm zeo dzco roki zx11 liw roki-gl aviator"
 
 check_args() {
@@ -89,11 +92,11 @@ check_args() {
         shift 2
         ;;
       --output-dir)
-        OUTPUT_DIR=$2
+        GIVEN_OUTPUT_DIR=$2
         shift 2
         ;;
       -o|--output)
-        OUTPUT_FILE=$2
+        GIVEN_OUTPUT_FILE=$2
         shift 2
         ;;
       --dry-run)
@@ -127,13 +130,13 @@ check_args() {
         exit 1
         ;;
       *)
-        GIVEN_LIBNAME=$1
+        GIVEN_LIBNAME_LIST="${GIVEN_LIBNAME_LIST}$1 "
         shift
         ;;
     esac
   done
 
-  if [[ -z $GIVEN_LIBNAME ]]; then
+  if [[ -z $GIVEN_LIBNAME_LIST ]]; then
     error "Please specify LIBNAME"
     usage
     exit 1
@@ -162,12 +165,15 @@ print_args() {
   print_var "HTTP_USER"
   print_var "HTTP_PASSWD"
   print_var "PASSWD_FILE"
-  print_var "OUTPUT_DIR"
-  print_var "OUTPUT_FILE"
+  print_var "GIVEN_OUTPUT_DIR"
+  print_var "GIVEN_OUTPUT_FILE"
+  print_var "GIVEN_LIBNAME_LIST"
   print_var "GIVEN_LIBNAME"
   print_var "FULL_LIBNAME"
   print_var "LIBNAME"
   print_var "VERSION"
+  print_var "OUTPUT_DIR"
+  print_var "OUTPUT_FILE"
 }
 
 error() {
@@ -424,8 +430,8 @@ try_dl_from_wiki() {
 }
 
 check_output_file() {
-  OUTPUT_DIR=${OUTPUT_DIR:-.}
-  OUTPUT_FILE=${OUTPUT_FILE:-${OUTPUT_DIR}/${FULL_LIBNAME}.tgz}
+  OUTPUT_DIR=${GIVEN_OUTPUT_DIR:-.}
+  OUTPUT_FILE=${GIVEN_OUTPUT_FILE:-${OUTPUT_DIR}/${FULL_LIBNAME}.tgz}
   verbose_message 2 "OUTPUT_DIR=$OUTPUT_DIR"
   verbose_message 2 "OUTPUT_FILE=$OUTPUT_FILE"
 }
@@ -433,7 +439,7 @@ check_output_file() {
 download() {
   check_output_file
   if [[ $FLAG_DL_FROM_PUBLIC == TRUE ]]; then
-    message "Try to download from the public site..."
+    message "Downloading $FULL_LIBNAME.tgz from the public site..."
     if try_dl_from_public; then
       message "done."
       return 0
@@ -442,7 +448,7 @@ download() {
     fi
   fi
   if [[ $FLAG_DL_FROM_WIKI == TRUE ]]; then
-    message "Try to download from the wiki..."
+    message "Downloading $FULL_LIBNAME.tgz from the wiki..."
     if try_dl_from_wiki; then
       message "done."
       return 0
@@ -456,9 +462,12 @@ download() {
 
 main() {
   check_args "$@"
-  check_lib_name
-  verbose_message 2 "$(print_args)"
-  download
+  for GIVEN_LIBNAME in $GIVEN_LIBNAME_LIST; do
+    check_lib_name
+    verbose_message 2 "$(print_args)"
+    download
+    verbose_message 2 "=================================================="
+  done
 }
 
 main "$@"
