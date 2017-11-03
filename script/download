@@ -414,6 +414,10 @@ try_dl_from_wiki() {
   local file_name=$(encode_url ${FULL_LIBNAME}.tgz)
   local url="${WIKI_HOST}?page=${page_name}&file=${file_name}&action=ATTACH"
   local command="wget ${opts} -O ${OUTPUT_FILE} ${url}"
+  if [[ -z $HTTP_USER || -z $HTTP_PASSWD ]]; then
+    error "Username and password should be provided"
+    return 1
+  fi
   try_download $command
   return $?
 }
