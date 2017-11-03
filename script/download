@@ -146,7 +146,7 @@ quote() {
 
 print_var() {
   eval "local var=\$$1"
-  if [[ -z $var ]]; then
+  if [[ -z "$var" ]]; then
     echo "$1="
   else
     echo "$1=$(quote $var)"
