@@ -1,0 +1,393 @@
+#!/bin/bash
+
+PUBLIC_HOST="http://mi.ams.eng.osaka-u.ac.jp/software"
+WIKI_HOST="http://www.mi.ams.eng.osaka-u.ac.jp/wiki/wiki.cgi"
+
+usage() {
+  cat <<END;
+Usage:
+  ${0} [OPTION]... [LIBNAME]
+Download tar archive of LIBNAME from $PUBLIC_HOST. \
+If specified version of LIBNAME does not exist on the host, \
+try to download from $WIKI_HOST if USER and PASSWD are provided.
+
+Options:
+      --public      Try to download from the public host, not try the wiki.
+      --wiki        Try to download from the wiki, not try the public host.
+      --user        Set username for authorization when downloading from wiki.
+      --passwd      Set password for authorization when downloading from wiki.
+      --passwd-file If specified, user and passwd are fetched from the file.
+      --output-dir  Set directory to save the downloaded file.
+  -o, --output      Set the downloaded file path. If this is specified,
+                    --output-dir option will be ignored.
+      --dry-run     Do not actually download file, just print command.
+  -h, --help        Show this message.
+
+Available LIBNAMEs:
+  * cure
+  * zm
+  * zeo
+  * dzco
+  * roki
+  * zx11
+  * liw
+  * roki-gl
+  * aviator (only from wiki)
+
+Examples:
+  ${0} cure
+      Download the latest version of cure.
+  ${0} cure-1.0.0-beta3
+      Download version 1.0.0-beta3 of cure.
+  ${0} --wiki --user USER --passwd PASSWD cure-0.8.26.20150107
+      Download version 0.8.26.20150107 of cure from wiki.
+END
+}
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" ; pwd -P)"
+VERSION_DIR="$(dirname "$SCRIPT_DIR")""/versions"
+FLAG_DL_FROM_PUBLIC=TRUE
+FLAG_DL_FROM_WIKI=TRUE
+FLAG_DRY_RUN=FALSE
+HTTP_USER=
+HTTP_PASSWD=
+PASSWD_FILE="$SCRIPT_DIR/passwd"
+OUTPUT_DIR=
+OUTPUT_FILE=
+GIVEN_LIBNAME=
+FULL_LIBNAME=
+LIBNAME=
+VERSION=
+LIBNAME_LIST="cure zm zeo dzco roki zx11 liw roki-gl aviator"
+
+check_args() {
+  while [ $# -gt 0 ]; do
+    case $1 in
+      --public)
+        FLAG_DL_FROM_PUBLIC=TRUE
+        FLAG_DL_FROM_WIKI=FALSE
+        shift
+        ;;
+      --wiki)
+        FLAG_DL_FROM_PUBLIC=FALSE
+        FLAG_DL_FROM_WIKI=TRUE
+        shift
+        ;;
+      --user)
+        HTTP_USER=$2
+        shift 2
+        ;;
+      --passwd)
+        HTTP_PASSWD=$2
+        shift 2
+        ;;
+      --passwd-file)
+        PASSWD_FILE=$2
+        shift 2
+        ;;
+      --output-dir)
+        OUTPUT_DIR=$2
+        shift 2
+        ;;
+      -o|--output)
+        OUTPUT_FILE=$2
+        shift 2
+        ;;
+      --dry-run)
+        FLAG_DRY_RUN=TRUE
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        break
+        ;;
+      --*|-*)
+        echo "unrecognized option: $1" >&2
+        usage
+        exit 1
+        ;;
+      *)
+        GIVEN_LIBNAME=$1
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z $GIVEN_LIBNAME ]]; then
+    echo "Please specify LIBNAME" >&2
+    usage
+    exit 1
+  fi
+}
+
+quote() {
+  echo "\"$1\""
+}
+
+print_var() {
+  eval "local var=\$$1"
+  if [[ -z $var ]]; then
+    echo "$1="
+  else
+    echo "$1=$(quote $var)"
+  fi
+}
+
+print_args() {
+  print_var "SCRIPT_DIR"
+  print_var "VERSION_DIR"
+  print_var "FLAG_DL_FROM_PUBLIC"
+  print_var "FLAG_DL_FROM_WIKI"
+  print_var "HTTP_USER"
+  print_var "HTTP_PASSWD"
+  print_var "PASSWD_FILE"
+  print_var "OUTPUT_DIR"
+  print_var "OUTPUT_FILE"
+  print_var "GIVEN_LIBNAME"
+  print_var "FULL_LIBNAME"
+  print_var "LIBNAME"
+  print_var "VERSION"
+}
+
+get_libname() {
+  local libname="${1%%-*}"
+  case $1 in
+    roki-gl*)
+      libname=roki-gl
+      ;;
+    glroki*)
+      libname=roki-gl
+      ;;
+    dzcon*)
+      libname=dzco
+      ;;
+  esac
+  echo $libname
+}
+
+get_version() {
+  local version=
+  if [[ $1 == $2 ]]; then
+    version=
+    echo $version
+    return
+  fi
+  case $1 in
+    glroki)
+      version=
+      ;;
+    glroki*)
+      version="${1#glroki-}"
+      ;;
+    dzcon)
+      version=
+      ;;
+    dzcon*)
+      version="${1#dzcon-}"
+      ;;
+    *)
+      version="${1#$2-}"
+      ;;
+  esac
+  echo $version
+}
+
+contains() {
+  local target="$1"; shift
+  local list="$@"
+  for item in $list; do
+    if [[ "$target" == "$item" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+check_lib_name() {
+  LIBNAME=$(get_libname $GIVEN_LIBNAME)
+  if ! contains $LIBNAME $LIBNAME_LIST; then
+    echo "$GIVEN_LIBNAME is not in the milib list." >&2
+    echo "Please select one of the following:" >&2
+    for lib in $LIBNAME_LIST; do
+      echo "  * $lib" >&2
+    done
+    exit 1
+  fi
+  VERSION=$(get_version $GIVEN_LIBNAME $LIBNAME)
+  if [[ -n $VERSION ]]; then
+    FULL_LIBNAME=$GIVEN_LIBNAME
+  else
+    local latest=$(head -n 1 $VERSION_DIR/$LIBNAME)
+    VERSION=$(get_version $latest $LIBNAME)
+    FULL_LIBNAME="$LIBNAME-$VERSION"
+  fi
+}
+
+replace_cmd() {
+  echo "s/$1/$2/g; "
+}
+
+encode_url() {
+  SED_CMD="\
+$(replace_cmd "\ " "%20")\
+$(replace_cmd "-"  "%2D")\
+$(replace_cmd "\." "%2E")\
+"
+  echo $1 | sed -e "$SED_CMD"
+}
+
+find_wiki_page() {
+  case $1 in
+    cure)
+      echo "CURE"
+      ;;
+    zm)
+      echo "ZM"
+      ;;
+    zeo)
+      echo "Zeo"
+      ;;
+    roki|roki-gl)
+      echo "RoKi"
+      ;;
+    dzco)
+      echo "DZco"
+      ;;
+    liw)
+      echo "LIW"
+      ;;
+    zx11)
+      echo "ZX11"
+      ;;
+    aviator)
+      echo "Aviator%CD%D1%A5%E9%A5%A4%A5%D6%A5%E9%A5%EA"
+      ;;
+    *)
+      echo "unexpected arguments: $1" >&2
+      exit 1
+  esac
+}
+
+set_http_user() {
+  if [[ -n "$HTTP_USER" ]]; then
+    return
+  elif [[ -f "$PASSWD_FILE" ]]; then
+    HTTP_USER=$(sed -n '1p' "$PASSWD_FILE")
+  fi
+}
+
+set_http_passwd() {
+  if [[ -n "$HTTP_PASSWD" ]]; then
+    return
+  elif [[ -f "$PASSWD_FILE" ]]; then
+    HTTP_PASSWD=$(sed -n '2p' "$PASSWD_FILE")
+  fi
+}
+
+try_download_dry_run() {
+  echo "$@"
+  "$@ --spider" &>/dev/null
+  return $?
+}
+
+validate_file() {
+  tar -tzf $1 &>/dev/null
+  return $?
+}
+
+try_download_execute() {
+  if [[ -f ${OUTPUT_FILE} ]]; then
+    echo "${OUTPUT_FILE} is already exists" >&2
+    return 0
+  else
+    "$@"
+    local ret=$?                # store the returned value
+    if [[ $ret == 0 ]]; then
+      if validate_file ${OUTPUT_FILE}; then
+        return 0
+      else
+        echo "${OUTPUT_FILE} was not tarball" >&2
+        rm ${OUTPUT_FILE}
+        return 1
+      fi
+    else
+      # Since no $OUTPUT_FILE is guaranteed,
+      # the following command could be allowed.
+      rm -f ${OUTPUT_FILE}
+      return $ret
+    fi
+  fi
+}
+
+try_download() {
+  if [[ $FLAG_DRY_RUN == TRUE ]]; then
+    try_download_dry_run "$@"
+  else
+    try_download_execute "$@"
+  fi
+  return $?
+}
+
+try_dl_from_public() {
+  local opts="--no-verbose --no-clobber"
+  local url=${PUBLIC_HOST}/${FULL_LIBNAME}.tgz
+  local command="wget ${opts} -O ${OUTPUT_FILE} ${url}"
+  try_download $command
+  return $?
+}
+
+try_dl_from_wiki() {
+  set_http_user
+  set_http_passwd
+  local opts="--no-verbose --no-clobber"
+  opts="${opts} --http-user=${HTTP_USER}"
+  opts="${opts} --http-passwd=${HTTP_PASSWD}"
+  local page_name=$(find_wiki_page ${LIBNAME})
+  local file_name=$(encode_url ${FULL_LIBNAME}.tgz)
+  local url="${WIKI_HOST}?page=${page_name}&file=${file_name}&action=ATTACH"
+  local command="wget ${opts} -O ${OUTPUT_FILE} ${url}"
+  try_download $command
+  return $?
+}
+
+check_output_file() {
+  OUTPUT_DIR=${OUTPUT_DIR:-.}
+  OUTPUT_FILE=${OUTPUT_FILE:-${OUTPUT_DIR}/${FULL_LIBNAME}.tgz}
+}
+
+download() {
+  check_output_file
+  if [[ $FLAG_DL_FROM_PUBLIC == TRUE ]]; then
+    echo "Try to download from the public site..."
+    if try_dl_from_public; then
+      echo "done."
+      return 0
+    else
+      echo "failed."
+    fi
+  fi
+  if [[ $FLAG_DL_FROM_WIKI == TRUE ]]; then
+    echo "Try to download from the wiki..."
+    if try_dl_from_wiki; then
+      echo "done."
+      return 0
+    else
+      echo "failed."
+    fi
+  fi
+  echo "Failed to download ${FULL_LIBNAME}"
+  return 1
+}
+
+main() {
+  check_args "$@"
+  check_lib_name
+  download
+  # print_args                    # for debug
+}
+
+main "$@"
