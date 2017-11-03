@@ -141,7 +141,7 @@ check_args() {
 }
 
 quote() {
-  echo "\"$1\""
+  echo "\"$@\""
 }
 
 print_var() {
