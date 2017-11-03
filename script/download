@@ -6,7 +6,7 @@ WIKI_HOST="http://www.mi.ams.eng.osaka-u.ac.jp/wiki/wiki.cgi"
 usage() {
   cat <<END;
 Usage:
-  ${0} [OPTION]... [LIBNAME]
+  ${0} [OPTION]... [LIBNAME]...
 Download tar archive of LIBNAME from $PUBLIC_HOST. \
 If specified version of LIBNAME does not exist on the host, \
 try to download from $WIKI_HOST if USER and PASSWD are provided.
