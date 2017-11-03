@@ -21,6 +21,8 @@ Options:
   -o, --output      Set the downloaded file path. If this is specified,
                     --output-dir option will be ignored.
       --dry-run     Do not actually download file, just print command.
+  -v, --verbose     Be verbose.
+  -q, --quiet       Be quiet (no output).
   -h, --help        Show this message.
 
 Available LIBNAMEs:
@@ -44,6 +46,7 @@ Examples:
 END
 }
 
+VERBOSE_LEVEL=1
 SCRIPT_DIR="$(cd "$(dirname "$0")" ; pwd -P)"
 VERSION_DIR="$(dirname "$SCRIPT_DIR")""/versions"
 FLAG_DL_FROM_PUBLIC=TRUE
@@ -97,6 +100,18 @@ check_args() {
         FLAG_DRY_RUN=TRUE
         shift
         ;;
+      -v|--verbose)
+        if [[ $2 =~ ^[0-9]+$ ]]; then
+          VERBOSE_LEVEL=$2
+          shift 2
+        else
+          shift
+        fi
+        ;;
+      -q|--quiet)
+        VERBOSE_LEVEL=0
+        shift
+        ;;
       -h|--help)
         usage
         exit 0
@@ -138,6 +153,7 @@ print_var() {
 }
 
 print_args() {
+  print_var "VERBOSE_LEVEL"
   print_var "SCRIPT_DIR"
   print_var "VERSION_DIR"
   print_var "FLAG_DL_FROM_PUBLIC"
@@ -151,6 +167,24 @@ print_args() {
   print_var "FULL_LIBNAME"
   print_var "LIBNAME"
   print_var "VERSION"
+}
+
+error() {
+  if [[ $VERBOSE_LEVEL -gt 0 ]]; then
+    echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $@" >&2
+  fi
+}
+
+verbose_message() {
+  local priority=$1  # Notice: larger value has less priority
+  shift
+  if [[ $VERBOSE_LEVEL -ge $priority ]]; then
+    echo "$@"
+  fi
+}
+
+message() {
+  verbose_message 1 "$@"
 }
 
 get_libname() {
@@ -210,10 +244,10 @@ contains() {
 check_lib_name() {
   LIBNAME=$(get_libname $GIVEN_LIBNAME)
   if ! contains $LIBNAME $LIBNAME_LIST; then
-    echo "$GIVEN_LIBNAME is not in the milib list." >&2
-    echo "Please select one of the following:" >&2
+    error "$GIVEN_LIBNAME is not in the milib list."
+    error "Please select one of the following:"
     for lib in $LIBNAME_LIST; do
-      echo "  * $lib" >&2
+      error "  * $lib"
     done
     exit 1
   fi
@@ -267,7 +301,7 @@ find_wiki_page() {
       echo "Aviator%CD%D1%A5%E9%A5%A4%A5%D6%A5%E9%A5%EA"
       ;;
     *)
-      echo "unexpected arguments: $1" >&2
+      error "unexpected arguments: $1"
       exit 1
   esac
 }
@@ -289,7 +323,6 @@ set_http_passwd() {
 }
 
 try_download_dry_run() {
-  echo "$@"
   "$@ --spider" &>/dev/null
   return $?
 }
@@ -301,7 +334,7 @@ validate_file() {
 
 try_download_execute() {
   if [[ -f ${OUTPUT_FILE} ]]; then
-    echo "${OUTPUT_FILE} is already exists" >&2
+    message "${OUTPUT_FILE} is already exists"
     return 0
   else
     "$@"
@@ -310,7 +343,7 @@ try_download_execute() {
       if validate_file ${OUTPUT_FILE}; then
         return 0
       else
-        echo "${OUTPUT_FILE} was not tarball" >&2
+        message "${OUTPUT_FILE} was not tarball"
         rm ${OUTPUT_FILE}
         return 1
       fi
@@ -362,32 +395,32 @@ check_output_file() {
 download() {
   check_output_file
   if [[ $FLAG_DL_FROM_PUBLIC == TRUE ]]; then
-    echo "Try to download from the public site..."
+    message "Try to download from the public site..."
     if try_dl_from_public; then
-      echo "done."
+      message "done."
       return 0
     else
-      echo "failed."
+      message "failed."
     fi
   fi
   if [[ $FLAG_DL_FROM_WIKI == TRUE ]]; then
-    echo "Try to download from the wiki..."
+    message "Try to download from the wiki..."
     if try_dl_from_wiki; then
-      echo "done."
+      message "done."
       return 0
     else
-      echo "failed."
+      message "failed."
     fi
   fi
-  echo "Failed to download ${FULL_LIBNAME}"
+  error "Failed to download ${FULL_LIBNAME}"
   return 1
 }
 
 main() {
   check_args "$@"
   check_lib_name
+  verbose_message 3 "$(print_args)"
   download
-  # print_args                    # for debug
 }
 
 main "$@"
