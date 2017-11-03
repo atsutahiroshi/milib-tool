@@ -457,7 +457,7 @@ download() {
 main() {
   check_args "$@"
   check_lib_name
-  verbose_message 3 "$(print_args)"
+  verbose_message 2 "$(print_args)"
   download
 }
 
