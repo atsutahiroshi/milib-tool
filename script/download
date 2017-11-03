@@ -325,12 +325,12 @@ set_http_passwd() {
 }
 
 try_download_dry_run() {
-  local cmd="${@/wget/wget --spider}"
+  local cmd="${@/wget/wget --spider -S}"
   verbose_message 2 "Try to fake download: $cmd"
   if [[ $VERBOSE_LEVEL -lt 2 ]]; then
-    "$cmd" &>/dev/null
+    $cmd &>/dev/null
   else
-    "$cmd"
+    $cmd
   fi
   return $?
 }
@@ -381,10 +381,11 @@ try_download() {
     try_download_execute "$@"
   fi
   ret=$?
-  if [[ $ret -gt 0 ]]; then
-    # `wget` will generate 0byte file even if it failed downloading
-    # when providing -O option
+  if [[ -f ${OUTPUT_FILE} &&
+          $(stat --printf="%s" ${OUTPUT_FILE}) == 0 ]]; then
+    # `wget` will generate 0byte file when providing -O option
     rm -f ${OUTPUT_FILE}
+    verbose_message 2 "Since file size is 0byte, ${OUTPUT_FILE} was removed"
   fi
   return $ret
 }
