@@ -332,8 +332,8 @@ set_http_passwd() {
 }
 
 try_download_dry_run() {
-  local cmd="${@/wget/wget --spider -S}"
   verbose_message 2 "Try to fake download: $cmd"
+  local cmd="${@/wget/wget --spider -S}"
   if [[ $VERBOSE_LEVEL -lt 2 ]]; then
     $cmd &>/dev/null
   else
@@ -355,32 +355,32 @@ validate_file() {
 
 try_download_execute() {
   verbose_message 2 "Try to execute downloading: $@"
-  if [[ -f ${OUTPUT_FILE} ]]; then
-    message "${OUTPUT_FILE} is already exists"
-    return 0
+  if [[ $VERBOSE_LEVEL -ge 1 ]]; then
+    "$@"
   else
-    if [[ $VERBOSE_LEVEL -ge 1 ]]; then
-      "$@"
-    else
-      "$@" &>/dev/null
-    fi
-    local ret=$?                # store the returned value
-    if [[ $ret == 0 ]]; then
-      if validate_file ${OUTPUT_FILE}; then
-        verbose_message 2 "${OUTPUT_FILE} was successfully downloaded"
-        return 0
-      else
-        message "${OUTPUT_FILE} was not tarball"
-        rm ${OUTPUT_FILE}
-        verbose_message 2 "${OUTPUT_FILE} was removed"
-        return 1
-      fi
-    fi
-    return $ret
+    "$@" &>/dev/null
   fi
+  local ret=$?                # store the returned value
+  if [[ $ret == 0 ]]; then
+    if validate_file ${OUTPUT_FILE}; then
+      verbose_message 2 "${OUTPUT_FILE} was successfully downloaded"
+      return 0
+    else
+      message "${OUTPUT_FILE} was not tarball"
+      rm ${OUTPUT_FILE}
+      verbose_message 2 "${OUTPUT_FILE} was removed"
+      return 1
+    fi
+  fi
+  return $ret
 }
 
 try_download() {
+  if [[ -f ${OUTPUT_FILE} ]]; then
+    message "${OUTPUT_FILE} is already exists"
+    return 0
+  fi
+
   local ret=
   if [[ $FLAG_DRY_RUN == TRUE ]]; then
     try_download_dry_run "$@"
@@ -388,6 +388,7 @@ try_download() {
     try_download_execute "$@"
   fi
   ret=$?
+
   if [[ -f ${OUTPUT_FILE} &&
           $(stat --printf="%s" ${OUTPUT_FILE}) == 0 ]]; then
     # `wget` will generate 0byte file when providing -O option
