@@ -678,7 +678,7 @@ commit() {
   fi
 }
 
-create_tag() {
+create_tag_prompt() {
   TAGNAME=${GIVEN_TAG:-"v$VERSION"}
   while true; do
     if [[ ($FLAG_YES != TRUE) && ($FLAG_DRY_RUN != TRUE) ]]; then
@@ -699,6 +699,12 @@ create_tag() {
         ;;
     esac
   done
+}
+
+create_tag() {
+  if [[ $FLAG_NO_TAG != TRUE ]]; then
+    create_tag_prompt
+  fi
 }
 
 cleanup() {
