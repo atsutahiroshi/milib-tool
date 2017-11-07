@@ -552,8 +552,7 @@ make_gitignore_for_repo() {
     fi
     echo "/app/$i" >>$tmpfile
   done
-  echo "/config" >>$tmpfile
-  echo "/*.o" >>$tmpfile
+  echo "*.o" >>$tmpfile
   verbose_message 2 "$gitignore:"
   verbose_message 2 "$(cat $tmpfile)"
   execute_git_command cp $tmpfile $gitignore
