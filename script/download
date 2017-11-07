@@ -70,7 +70,7 @@ END
 }
 
 check_args() {
-  while [ $# -gt 0 ]; do
+  while [[ $# -gt 0 ]]; do
     case $1 in
       --public)
         FLAG_DL_FROM_PUBLIC=TRUE
