@@ -43,6 +43,7 @@ Options:
   -o, --output FILE         Set the downloaded file path. If this is specified,
                             --output-dir option will be ignored.
       --dry-run             Do not actually download file, just print command.
+                            (Default: $FLAG_DRY_RUN)
   -v, --verbose [LEVEL]     Be verbose. (Default: $VERBOSE_LEVEL)
   -q, --quiet               Be quiet (no output).
   -h, --help                Show this message.
