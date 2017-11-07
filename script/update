@@ -1,0 +1,733 @@
+#!/bin/bash
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" ; pwd -P)"
+VERSION_DIR="$(dirname "$SCRIPT_DIR")""/versions"
+FLAG_YES=FALSE
+FLAG_NO_GIT=FALSE
+FLAG_FORCE_INIT=FALSE
+START_BRANCH=master
+CREATE_BRANCH=master
+FLAG_NO_COMMIT=FALSE
+GIVEN_COMMIT_MSG=
+GIVEN_TAG=
+FLAG_NO_TAG=FALSE
+AUTHOR_NAME="Tomomichi Sugihara"
+AUTHOR_EMAIL="zhidao@ieee.org"
+GIVEN_COMMIT_DATE=
+GIVEN_PREFIX=
+PREFIX=
+FLAG_DRY_RUN=FALSE
+VERBOSE_LEVEL=0
+GIVEN_SOURCE=
+GIVEN_DESTINATION=
+ACTUAL_SOURCE=
+ACTUAL_DESTINATION=
+EXTRACTED_DIR=
+CREATED_TMP_DIRS=
+CREATED_TMP_FILES=
+LIBNAME=
+VERSION=
+FULL_LIBNAME=
+LIBNAME_LIST="cure zm zeo dzco roki zx11 liw roki-gl aviator"
+
+usage() {
+  cat <<END;
+Usage:
+  ${0} [OPTION]... SOURCE [DIRECTORY]
+Update files in DIRECOTY to files in SOURCE. \
+SOURCE should be a tarball or a direcotry. \
+If DIRECTORY is a Git repository, make a commit. \
+If DIRECTORY is not specified, it will be set for the library name of SOURCE.
+
+Options:
+  -y, --yes                 Automatic yes to prompts. (Default: $FLAG_YES)
+      --no-git              Do not allow any git operations, just copy files.
+                            (Default: $FLAG_NO_GIT)
+      --force-init          Force to initialize DIRECTORY as a new repository.
+                            (Default: $FLAG_FORCE_INIT)
+      --start-branch [NAME]   Switch to NAME branch before updating.
+                              (Default: $START_BRANCH)
+      --create-branch [NAME]  Do commit after creating NAME branch.
+                              (Default: $CREATE_BRANCH)
+  -m, --commit-msg MSG      Use the given MSG as the commit message.
+      --no-commit           Do not make a commit. (Default: $FLAG_NO_COMMIT)
+  -t, --tag TAGNAME         Create a git tag with TAGNAME
+      --no-tag              Do not create a tag. (Default: $FLAG_NO_TAG)
+      --author-name NAME    Use the given NAME as the committer and author
+                            names. (Default: $AUTHOR_NAME)
+      --author-email EMAIL  Use the given EMAIL as the committer and author's
+                            emails. (Default: $AUTHOR_EMAIL)
+      --commit-date DATE    Use the given DATE as the commit date.
+      --prefix [PATH]       Desitination directory will be created under PATH.
+      --dry-run             Do not actually commit, just print command.
+                            (Default: $FLAG_DRY_RUN)
+  -v, --verbose [LEVEL]     Be verbose. (Default: $VERBOSE_LEVEL)
+  -q, --quiet               Be quiet (no output).
+  -h, --help                Show this message.
+
+Examples:
+  ${0} cure-1.0.0-beta3.tgz
+      Extract files from cure-1.0.0-beta3.tgz and copy them to cure/
+      directory. Then, make a commit to the repository or initialize it
+      as a Git repository.
+  ${0} --yes cure-1.0.0-beta3
+      Do not show prompts to preview the diff and the commit message before
+      actually making the commit.
+  ${0} --no-git cure-1.0.0-beta3 cure-test
+      Just copy files in cure-test directory to ones in cure-1.0.0-beta3.
+      This does not initialize the direcotry as Git repo, not make a commit.
+  ${0} --author-name suzuki cure-1.0.0-beta3
+      Change the autor and committer names to suzuki.
+  ${0} --prefix /tmp cure-1.0.0-beta3.tgz
+      Extract cure-1.0.0-beta3.tgz and copy them under /tmp/cure.
+
+END
+}
+
+ARGS=
+check_args() {
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -y|--yes)
+        FLAG_YES=TRUE
+        shift
+        ;;
+      --no-git)
+        FLAG_NO_GIT=TRUE
+        shift
+        ;;
+      --force-init)
+        FLAG_FORCE_INIT=TRUE
+        shift
+        ;;
+      --start-branch)
+        START_BRANCH=$2
+        shift 2
+        ;;
+      --create-branch)
+        CREATE_BRANCH=$2
+        shift 2
+        ;;
+      -m|--commit-msg)
+        GIVEN_COMMIT_MSG=$2
+        shift 2
+        ;;
+      --no-commit)
+        FLAG_NO_COMMIT=TRUE
+        shift
+        ;;
+      -t|--tag)
+        GIVEN_TAG=$2
+        shift 2
+        ;;
+      --no-tag)
+        FLAG_NO_TAG=TRUE
+        shift
+        ;;
+      --author-name)
+        AUTHOR_NAME=$2
+        shift 2
+        ;;
+      --author-email)
+        AUTHOR_EMAIL=$2
+        shift 2
+        ;;
+      --commit-date)
+        GIVEN_COMMIT_DATE=$2
+        shift 2
+        ;;
+      --prefix)
+        GIVEN_PREFIX=$2
+        shift 2
+        ;;
+      --dry-run)
+        FLAG_DRY_RUN=TRUE
+        shift
+        ;;
+      -v|--verbose)
+        if [[ $2 =~ ^[0-9]+$ ]]; then
+          VERBOSE_LEVEL=$2
+          shift 2
+        else
+          VERBOSE_LEVEL=1
+          shift
+        fi
+        ;;
+      -q|--quiet)
+        VERBOSE_LEVEL=-1
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      --)
+        shift
+        break
+        ;;
+      --*|-*)
+        error "Unrecognized option: $1"
+        usage
+        exit 1
+        ;;
+      *)
+        ARGS=$(append_elem $1 $ARGS)
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z $ARGS ]]; then
+    error "Please specify SOURCE"
+    usage
+    exit 1
+  else
+    set -- $ARGS
+    GIVEN_SOURCE=$1
+    GIVEN_DESTINATION=$2
+  fi
+
+  PREFIX=${GIVEN_PREFIX%/}
+  PREFIX=${PREFIX:-.}
+}
+
+append_elem() {
+  local new_elem=${1}
+  shift
+  echo "$@ $new_elem"
+}
+
+quote() {
+  echo "\"$@\""
+}
+
+print_var() {
+  eval "local var=\$$1"
+  if [[ -z "$var" ]]; then
+    echo "$1="
+  else
+    echo "$1=$(quote $var)"
+  fi
+}
+
+print_args() {
+  print_var "SCRIPT_DIR"
+  print_var "VERSION_DIR"
+  print_var "FLAG_YES"
+  print_var "FLAG_NO_GIT"
+  print_var "FLAG_FORCE_INIT"
+  print_var "START_BRANCH"
+  print_var "CREATE_BRANCH"
+  print_var "FLAG_NO_COMMIT"
+  print_var "GIVEN_COMMIT_MSG"
+  print_var "GIVEN_TAG"
+  print_var "FLAG_NO_TAG"
+  print_var "AUTHOR_NAME"
+  print_var "AUTHOR_EMAIL"
+  print_var "GIVEN_COMMIT_DATE"
+  print_var "GIVEN_PREFIX"
+  print_var "PREFIX"
+  print_var "FLAG_DRY_RUN"
+  print_var "VERBOSE_LEVEL"
+  print_var "GIVEN_SOURCE"
+  print_var "GIVEN_DESTINATION"
+  print_var "ACTUAL_SOURCE"
+  print_var "ACTUAL_DESTINATION"
+  print_var "EXTRACTED_DIR"
+  print_var "CREATED_TMP_DIRS"
+  print_var "CREATED_TMP_FILES"
+  print_var "FULL_LIBNAME"
+  print_var "LIBNAME"
+  print_var "VERSION"
+  print_var "ARGS"
+}
+
+error() {
+  if [[ $VERBOSE_LEVEL -ge 0 ]]; then
+    echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')]: $@" >&2
+  fi
+}
+
+verbose_message() {
+  local priority=$1  # Notice: larger value has less priority
+  shift
+  if [[ $VERBOSE_LEVEL -ge $priority ]]; then
+    echo "$@"
+  fi
+}
+
+message() {
+  verbose_messsage 0 "$@"
+}
+
+get_libname() {
+  local libname="${1%%-*}"
+  case $1 in
+    roki-gl*)
+      libname=roki-gl
+      ;;
+    glroki*)
+      libname=roki-gl
+      ;;
+    dzcon*)
+      libname=dzco
+      ;;
+  esac
+  echo $libname
+}
+
+get_version() {
+  local version=
+  if [[ $1 == $2 ]]; then
+    version=
+    echo $version
+    return
+  fi
+  case $1 in
+    glroki)
+      version=
+      ;;
+    glroki*)
+      version="${1#glroki-}"
+      ;;
+    dzcon)
+      version=
+      ;;
+    dzcon*)
+      version="${1#dzcon-}"
+      ;;
+    *)
+      version="${1#$2-}"
+      ;;
+  esac
+  echo $version
+}
+
+contains() {
+  local target="$1"; shift
+  local list="$@"
+  for item in $list; do
+    if [[ "$target" == "$item" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+remove_ext_tgz() {
+  local filepath=$1
+  local filename=$(basename $filepath)
+  local output=${filename%.tgz}
+  output=${output%.tar.gz}
+  echo $output
+}
+
+check_lib_name() {
+  verbose_message 1 "Checking given library name: $1"
+  local libname_local=$(remove_ext_tgz $1)
+  LIBNAME=$(get_libname $libname_local)
+  if ! contains $LIBNAME $LIBNAME_LIST; then
+    error "$1 is not in the milib list."
+    error "Please select one of the following:"
+    for lib in $LIBNAME_LIST; do
+      error "  * $lib"
+    done
+    exit 1
+  fi
+  VERSION=$(get_version $libname_local $LIBNAME)
+  if [[ -n $VERSION ]]; then
+    FULL_LIBNAME=$libname_local
+  else
+    local latest=$(head -n 1 $VERSION_DIR/$LIBNAME)
+    VERSION=$(get_version $latest $LIBNAME)
+    FULL_LIBNAME="$LIBNAME-$VERSION"
+  fi
+}
+
+validate_tarball() {
+  verbose_message 1 "Validating $1 if it is a tarball or not."
+  local cmd="tar -tzf $1"
+  verbose_message 1 $cmd
+  if [[ $VERBOSE_LEVEL -lt 2 ]]; then
+    $cmd &>/dev/null
+  else
+    $cmd
+  fi
+  local result=$?
+  verbose_message 1 "Result: $result"
+  return $result
+}
+
+validate_directory() {
+  verbose_message 1 "Validating $1 if it is a directory or not."
+  local cmd="test -d $1"
+  verbose_message 1 $cmd
+  $cmd
+  local result=$?
+  verbose_message 1 "Result: $result"
+  return $result
+}
+
+check_source() {
+  verbose_message 1 "Checking source: $1"
+  local filepath=$1
+  if validate_tarball $filepath; then
+    ACTUAL_SOURCE=$filepath
+  elif validate_directory $filepath; then
+    ACTUAL_SOURCE=$filepath
+  elif validate_tarball ${filepath}.tgz; then
+    ACTUAL_SOURCE=${filepath}.tgz
+  elif validate_tarball ${filepath}.tar.gz; then
+    ACTUAL_SOURCE=${filepath}.tar.gz
+  else
+    error "Invalid source: $filepath"
+    exit 1
+  fi
+  verbose_message 1 "Result: $ACTUAL_SOURCE"
+}
+
+check_destination() {
+  verbose_message 1 "Checking destination: $1"
+  local filepath=${1%/}
+  ACTUAL_DESTINATION=${filepath:-$PREFIX/$LIBNAME}
+  verbose_message 1 "Result: $ACTUAL_DESTINATION"
+}
+
+execute_command() {
+  if [[ $FLAG_DRY_RUN != TRUE ]]; then
+    verbose_message 1 "$@"
+    if [[ $VERBOSE_LEVEL -ge 0 ]]; then
+      "$@"
+    else
+      "$@" &>/dev/null
+    fi
+  else
+    echo "$@"
+  fi
+}
+
+execute_git_command() {
+  if [[ $FLAG_NO_GIT == FALSE ]]; then
+    execute_command "$@"
+  else
+    verbose_message 1 "Suppressed git commands: $@"
+  fi
+}
+
+make_tmp_dir() {
+  local dirname=$(mktemp -d)
+  echo $dirname
+}
+
+prepare_source_files() {
+  verbose_message 1 "Preparing source files"
+  if validate_tarball $ACTUAL_SOURCE; then
+    local tmpdir=$(make_tmp_dir)
+    CREATED_TMP_DIRS=$(append_elem $tmpdir $CREATED_TMP_DIRS)
+    local cmd="tar xfz $ACTUAL_SOURCE --directory=$tmpdir"
+    verbose_message 1 "$tmpdir was created."
+    execute_command $cmd
+    EXTRACTED_DIR="$tmpdir/$(ls $tmpdir | head -1)"
+  elif validate_directory $ACTUAL_SOURCE; then
+    EXTRACTED_DIR=$ACTUAL_SOURCE
+    verbose_message 1 "$EXTRACTED_DIR is already extracted."
+  else
+    error "Invalid actual source: $ACTUAL_SOURCE"
+    cleanup
+    exit 1
+  fi
+  verbose_message 1 "Source files exist under $EXTRACTED_DIR"
+}
+
+remove_files_excluding_git() {
+  local opt_common="$1 -mindepth 1 -maxdepth 1"
+  local opt_ex_git_files="-type f ! -name .git*"
+  local opt_ex_git_dirs="-type d ! -name .git"
+  local opt_rm_files="-exec rm -f {} +"
+  local opt_rm_dirs="-exec rm -rf {} +"
+  local cmd=
+
+  # Removing files
+  cmd="find $opt_common $opt_ex_git_files $opt_rm_files"
+  verbose_message 2 "Removing files..."
+  verbose_message 2 "$(find $opt_common $opt_ex_git_files)"
+  execute_command $cmd
+
+  # Removing directories
+  cmd="find $opt_common $opt_ex_git_dirs $opt_rm_dirs"
+  verbose_message 2 "Removing directories..."
+  verbose_message 2 "$(find $opt_common $opt_ex_git_dirs)"
+  execute_command $cmd
+}
+
+git_init() {
+  local cmd="git init"
+  if [[ ! -d .git ]]; then
+    verbose_message 1 "Initializing as Git repository..."
+    execute_git_command $cmd
+  elif [[ $FLAG_FORCE_INIT == TRUE ]]; then
+    verbose_message 1 "Forcely initializing as Git repository..."
+    execute_git_command rm -rf .git
+    execute_git_command $cmd
+  fi
+}
+
+git_checkout() {
+  local cmd="git checkout -q $1"
+  if [[ -n $(git branch) ]]; then
+    execute_git_command $cmd
+    if [[ $? -gt 0 ]]; then
+      error "Failed to switch branch to '$1'"
+      error "Please make sure '$1' exists"
+      cd -
+      cleanup
+      exit 1
+    fi
+  fi
+}
+
+git_branch() {
+  if ! git rev-parse --verify $1 &>/dev/null; then
+    execute_git_command git branch -f $1
+    git_checkout $1
+  fi
+}
+
+prepare_destination() {
+  verbose_message 1 "Preparing destination"
+  local cmd=
+  if [[ -d $ACTUAL_DESTINATION ]]; then
+    remove_files_excluding_git $ACTUAL_DESTINATION
+    verbose_message 1 "Removed files in $ACTUAL_DESTINATION"
+  else
+    cmd="mkdir -p $ACTUAL_DESTINATION"
+    execute_command $cmd
+    verbose_message 1 "$ACTUAL_DESTINATION was created"
+  fi
+  execute_command cd $ACTUAL_DESTINATION
+  git_init
+  git_checkout $START_BRANCH
+  execute_command cd -
+  verbose_message 1 "$ACTUAL_DESTINATION is ready"
+}
+
+copy_files() {
+  verbose_message 1 "Copying files..."
+  local cmd="cp -r $EXTRACTED_DIR/* $ACTUAL_DESTINATION"
+  execute_command $cmd
+  verbose_message 1 "Updated files in $ACTUAL_DESTINATION"
+}
+
+get_line_starting_with() {
+  local cmd_sed=":x; /\\\\$/ { N; s/\\\\\n//; tx }"
+  local cmd_grep="^$2="
+  # echo "sed '$cmd_sed' $1 | grep '$cmd_grep'" >&2
+  if [[ $FLAG_DRY_RUN != TRUE ]]; then
+    echo $(sed "$cmd_sed" $1 | grep "$cmd_grep")
+  else
+    echo "sed '$cmd_sed' $1 | grep '$cmd_grep'"
+  fi
+}
+
+find_apps() {
+  local apps=
+  local makefile=$1
+  tmp=$(get_line_starting_with $makefile "CONFIGGEN")
+  apps=$(append_elem "${tmp#*=}" $apps)
+  tmp=$(get_line_starting_with $makefile "CONFIG")
+  apps=$(append_elem "${tmp#*=}" $apps)
+  tmp=$(get_line_starting_with $makefile "TARGET")
+  apps=$(append_elem "${tmp#*=}" $apps)
+  echo $apps
+}
+
+make_gitignore_for_repo() {
+  local apps=$(find_apps app/makefile)
+  local gitignore=.gitignore
+  local tmpfile=$(mktemp)
+  CREATED_TMP_FILES=$(append_elem $tmpfile $CREATED_TMP_FILES)
+  for i in $apps; do
+    if [[ $i == "$"* ]]; then
+      continue
+    fi
+    echo "/app/$i" >>$tmpfile
+  done
+  echo "/config" >>$tmpfile
+  echo "/*.o" >>$tmpfile
+  verbose_message 2 "$gitignore:"
+  verbose_message 2 "$(cat $tmpfile)"
+  execute_git_command cp $tmpfile $gitignore
+}
+
+find_empty_dirs() {
+  find $1 -type d -empty | grep -v ".git"
+}
+
+make_gitignore_for_empty_dirs() {
+  local tmpfile=$(mktemp)
+  CREATED_TMP_FILES=$(append_elem $tmpfile $CREATED_TMP_FILES)
+  echo "*" >>$tmpfile
+  echo "!.gitignore" >>$tmpfile
+  for i in $(find_empty_dirs .); do
+    local gitignore=$i/.gitignore
+    verbose_message 2 "$gitignore:"
+    verbose_message 2 "$(cat $tmpfile)"
+    execute_git_command cp $tmpfile $gitignore
+  done
+}
+
+make_gitignore() {
+  verbose_message 1 "Creating Git ignore files..."
+  make_gitignore_for_repo
+  make_gitignore_for_empty_dirs
+}
+
+show_diff_prompt() {
+  while true; do
+    if [[ ($FLAG_YES != TRUE) && ($FLAG_DRY_RUN != TRUE) ]]; then
+      read -p "Above files are modified. Skip to see changes? [y/N]" yn
+    else
+      yn=y
+    fi
+    case $yn in
+      [Yy]*)
+        break
+        ;;
+      [Nn]*)
+        execute_git_command git diff
+        break
+        ;;
+      *)
+        echo "Please answer yes or no."
+        ;;
+    esac
+  done
+}
+
+show_diff() {
+  verbose_message 1 "Changed files:"
+  verbose_message 1 "$(git --no-pager diff --name-only)"
+  show_diff_prompt
+}
+
+COMMIT_MSG_TMPL=
+COMMIT_DATE=
+make_commit_msg() {
+  local tmpfile=$(mktemp)
+  CREATED_TMP_FILES=$(append_elem $tmpfile $CREATED_TMP_FILES)
+  COMMIT_MSG_TMPL=$tmpfile
+
+  if [[ -n "$GIVEN_COMMIT_MSG" ]]; then
+    echo "$GIVEN_COMMIT_MSG" >>$tmpfile
+    return
+  fi
+
+  echo "Version $VERSION" >>$tmpfile
+  echo "" >>$tmpfile
+  git diff --unified=0 -- HISTORY \
+    | grep "^\+[0-9]" \
+    | sed "s/^+//g" >>$tmpfile
+
+  local y="$(head -1 HISTORY | cut -d '.' -f 1)"
+  local m="$(head -1 HISTORY | cut -d '.' -f 2)"
+  local d="$(head -1 HISTORY | cut -d '.' -f 3)"
+  COMMIT_DATE=${GIVEN_COMMIT_DATE:-"${y}-${m}-${d}"}
+}
+
+do_commit() {
+  while true; do
+    if [[ ($FLAG_YES != TRUE) && ($FLAG_DRY_RUN != TRUE) ]]; then
+      cat $COMMIT_MSG_TMPL
+      read -p "Is it OK to commit with the message above? [y/N]" yn
+    else
+      yn=y
+    fi
+    local author="$AUTHOR_NAME <$AUTHOR_EMAIL>"
+    local date=$(TZ=Japan date --rfc-2822 -d "$COMMIT_DATE")
+    case $yn in
+      [Yy]*)
+        execute_git_command git commit --author="$author" --date="$date" --file=$COMMIT_MSG_TMPL
+        break
+        ;;
+      [Nn]*)
+        execute_git_command git commit --author="$author" --date="$date" --template=$COMMIT_MSG_TMPL
+        if [[ $? == 0 ]]; then
+          break
+        else
+          continue
+        fi
+        ;;
+      *)
+        echo "Please answer yes or no."
+        ;;
+    esac
+  done
+}
+
+commit() {
+  make_commit_msg
+  if [[ -z "$(git status --porcelain)" ]]; then
+    error "Nothing to commit."
+    cleanup
+    cd -
+    exit 1
+  else
+    git_branch $CREATE_BRANCH
+    execute_git_command git add .
+    do_commit
+  fi
+}
+
+create_tag() {
+  TAGNAME=${GIVEN_TAG:-"v$VERSION"}
+  while true; do
+    if [[ ($FLAG_YES != TRUE) && ($FLAG_DRY_RUN != TRUE) ]]; then
+      read -p "Do you want to create tag? [y/N]" yn
+    else
+      yn=y
+    fi
+    case $yn in
+      [Yy]*)
+        execute_git_command git tag "$TAGNAME" HEAD
+        break
+        ;;
+      [Nn]*)
+        break
+        ;;
+      *)
+        echo "Please answer yes or no."
+        ;;
+    esac
+  done
+}
+
+cleanup() {
+  for dir in $CREATED_TMP_DIRS; do
+    verbose_message 1 "Removing directory: $dir..."
+    rm -rf $dir
+  done
+  for file in $CREATED_TMP_FILES; do
+    verbose_message 1 "Removing file: $file..."
+    rm -f $file
+  done
+}
+
+main() {
+  check_args "$@"
+  check_lib_name $GIVEN_SOURCE
+  check_source $GIVEN_SOURCE
+  check_destination $GIVEN_DESTINATION
+  prepare_source_files
+  prepare_destination
+  copy_files
+  cd $ACTUAL_DESTINATION
+  make_gitignore
+  show_diff
+  commit
+  create_tag
+  cd -
+  cleanup
+  print_args
+}
+
+main "$@"
