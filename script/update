@@ -2,7 +2,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" ; pwd -P)"
 VERSION_DIR="$(dirname "$SCRIPT_DIR")""/versions"
-FLAG_YES=FALSE
+FLAG_SKIP_PROMPT=FALSE
 FLAG_NO_GIT=FALSE
 FLAG_FORCE_INIT=FALSE
 START_BRANCH=master
@@ -40,7 +40,7 @@ If DIRECTORY is a Git repository, make a commit. \
 If DIRECTORY is not specified, it will be set for the library name of SOURCE.
 
 Options:
-  -y, --yes                 Automatic yes to prompts. (Default: $FLAG_YES)
+  -s, --skip                Skip all prompts. (Default: $FLAG_SKIP_PROMPT)
       --no-git              Do not allow any git operations, just copy files.
                             (Default: $FLAG_NO_GIT)
       --force-init          Force to initialize DIRECTORY as a new repository.
@@ -70,7 +70,7 @@ Examples:
       Extract files from cure-1.0.0-beta3.tgz and copy them to cure/
       directory. Then, make a commit to the repository or initialize it
       as a Git repository.
-  ${0} --yes cure-1.0.0-beta3
+  ${0} --skip cure-1.0.0-beta3
       Do not show prompts to preview the diff and the commit message before
       actually making the commit.
   ${0} --no-git cure-1.0.0-beta3 cure-test
@@ -88,8 +88,8 @@ ARGS=
 check_args() {
   while [[ $# -gt 0 ]]; do
     case $1 in
-      -y|--yes)
-        FLAG_YES=TRUE
+      -s|--skip)
+        FLAG_SKIP_PROMPT=TRUE
         shift
         ;;
       --no-git)
@@ -213,7 +213,7 @@ print_var() {
 print_args() {
   print_var "SCRIPT_DIR"
   print_var "VERSION_DIR"
-  print_var "FLAG_YES"
+  print_var "FLAG_SKIP_PROMPT"
   print_var "FLAG_NO_GIT"
   print_var "FLAG_FORCE_INIT"
   print_var "START_BRANCH"
@@ -583,17 +583,19 @@ make_gitignore() {
 
 show_diff_prompt() {
   while true; do
-    if [[ ($FLAG_YES != TRUE) && ($FLAG_DRY_RUN != TRUE) ]]; then
-      read -p "Above files are modified. Skip to see changes? [y/N]" yn
+    if [[ ($FLAG_SKIP_PROMPT != TRUE) \
+            && ($FLAG_NO_GIT != TRUE) \
+            && ($FLAG_DRY_RUN != TRUE) ]]; then
+      read -p "Above files are modified or added. See changes? [y/N]" yn
     else
-      yn=y
+      yn=n
     fi
     case $yn in
       [Yy]*)
+        execute_git_command git diff
         break
         ;;
       [Nn]*)
-        execute_git_command git diff
         break
         ;;
       *)
@@ -639,7 +641,9 @@ make_commit_msg() {
 
 do_commit() {
   while true; do
-    if [[ ($FLAG_YES != TRUE) && ($FLAG_DRY_RUN != TRUE) ]]; then
+    if [[ ($FLAG_SKIP_PROMPT != TRUE) \
+            && ($FLAG_NO_GIT != TRUE) \
+            && ($FLAG_DRY_RUN != TRUE) ]]; then
       cat $COMMIT_MSG_TMPL
       read -p "Is it OK to commit with the message above? [y/N]" yn
     else
@@ -684,7 +688,9 @@ commit() {
 create_tag_prompt() {
   TAGNAME=${GIVEN_TAG:-"v$VERSION"}
   while true; do
-    if [[ ($FLAG_YES != TRUE) && ($FLAG_DRY_RUN != TRUE) ]]; then
+    if [[ ($FLAG_SKIP_PROMPT != TRUE) \
+            && ($FLAG_NO_GIT != TRUE) \
+            && ($FLAG_DRY_RUN != TRUE) ]]; then
       read -p "Do you want to create tag? [y/N]" yn
     else
       yn=y
