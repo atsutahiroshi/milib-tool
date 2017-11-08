@@ -532,12 +532,14 @@ get_line_starting_with() {
 find_apps() {
   local apps=
   local makefile=$1
-  tmp=$(get_line_starting_with $makefile "CONFIGGEN")
-  apps=$(append_elem "${tmp#*=}" $apps)
-  tmp=$(get_line_starting_with $makefile "CONFIG")
-  apps=$(append_elem "${tmp#*=}" $apps)
-  tmp=$(get_line_starting_with $makefile "TARGET")
-  apps=$(append_elem "${tmp#*=}" $apps)
+  if [[ -f $makefile ]]; then
+    tmp=$(get_line_starting_with $makefile "CONFIGGEN")
+    apps=$(append_elem "${tmp#*=}" $apps)
+    tmp=$(get_line_starting_with $makefile "CONFIG")
+    apps=$(append_elem "${tmp#*=}" $apps)
+    tmp=$(get_line_starting_with $makefile "TARGET")
+    apps=$(append_elem "${tmp#*=}" $apps)
+  fi
   echo $apps
 }
 
