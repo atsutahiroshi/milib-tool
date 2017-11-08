@@ -603,9 +603,32 @@ show_diff_prompt() {
   done
 }
 
+show_list_with_indent() {
+  if [[ -z "$@" ]]; then
+    echo "  (none)"
+  fi
+  for item in "$@"; do
+    echo "  * $item"
+  done
+}
+
 show_diff() {
-  verbose_message 1 "Changed files:"
-  verbose_message 1 "$(git --no-pager diff --name-only)"
+  local list=
+
+  if [[ $FLAG_NO_GIT != TRUE ]]; then
+    message "Changed files:"
+    list=$(git ls-files -m)
+    message "$(show_list_with_indent $list)"
+
+    message "Addded files:"
+    list=$(git ls-files -o)
+    message "$(show_list_with_indent $list)"
+
+    message "Deleted files:"
+    list=$(git ls-files -d)
+    message "$(show_list_with_indent $list)"
+  fi
+
   show_diff_prompt
 }
 
