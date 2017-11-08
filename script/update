@@ -732,7 +732,7 @@ main() {
   create_tag
   cd -
   cleanup
-  print_args
+  verbose_message 2 "$(print_args)"
 }
 
 main "$@"
