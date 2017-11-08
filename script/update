@@ -257,7 +257,7 @@ verbose_message() {
 }
 
 message() {
-  verbose_messsage 0 "$@"
+  verbose_message 0 "$@"
 }
 
 get_libname() {
