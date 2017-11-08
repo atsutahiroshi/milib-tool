@@ -483,9 +483,11 @@ git_checkout() {
 }
 
 git_branch() {
-  if ! git rev-parse --verify $1 &>/dev/null; then
-    execute_git_command git branch -f $1
-    git_checkout $1
+  if [[ -n $(git branch) ]]; then
+    if ! git rev-parse --verify $1 &>/dev/null; then
+      execute_git_command git branch -f $1
+      git_checkout $1
+    fi
   fi
 }
 
