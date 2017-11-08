@@ -623,9 +623,13 @@ make_commit_msg() {
 
   echo "Version $VERSION" >>$tmpfile
   echo "" >>$tmpfile
-  git diff --unified=0 -- HISTORY \
-    | grep "^\+[0-9]" \
-    | sed "s/^+//g" >>$tmpfile
+  if [[ -n $(git branch) ]]; then
+    git diff --unified=0 -- HISTORY \
+      | grep "^\+[0-9]" \
+      | sed "s/^+//g" >>$tmpfile
+  else
+    cat HISTORY >>$tmpfile
+  fi
 
   local y="$(head -1 HISTORY | cut -d '.' -f 1)"
   local m="$(head -1 HISTORY | cut -d '.' -f 2)"
