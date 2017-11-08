@@ -440,24 +440,20 @@ prepare_source_files() {
 }
 
 remove_files_excluding_git() {
-  local opt_common="$1 -mindepth 1 -maxdepth 1"
-  local opt_ex_git_files="-type f ! -name .git*"
-  local opt_ex_git_dirs="-type d ! -name .git"
-  local opt_rm_files="-exec rm -f {} +"
-  local opt_rm_dirs="-exec rm -rf {} +"
-  local cmd=
-
   # Removing files
-  cmd="find $opt_common $opt_ex_git_files $opt_rm_files"
   verbose_message 2 "Removing files..."
-  verbose_message 2 "$(find $opt_common $opt_ex_git_files)"
-  execute_command $cmd
+  verbose_message 2 \
+    "$(find $1 -mindepth 1 -maxdepth 1 -type f ! -name .git\*)"
+  execute_command \
+    find $1 -mindepth 1 -maxdepth 1 -type f ! -name ".git*" -exec rm -f {} +
 
   # Removing directories
   cmd="find $opt_common $opt_ex_git_dirs $opt_rm_dirs"
   verbose_message 2 "Removing directories..."
-  verbose_message 2 "$(find $opt_common $opt_ex_git_dirs)"
-  execute_command $cmd
+  verbose_message 2 \
+    "$(find $1 -mindepth 1 -maxdepth 1 -type d ! -name .git)"
+  execute_command \
+    find $1 -mindepth 1 -maxdepth 1 -type d ! -name ".git" -exec rm -rf {} +
 }
 
 git_init() {
