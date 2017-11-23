@@ -447,8 +447,6 @@ download() {
     if try_dl_from_public; then
       message "done."
       return 0
-    else
-      message "failed."
     fi
   fi
   if [[ $FLAG_DL_FROM_WIKI == TRUE ]]; then
@@ -456,8 +454,6 @@ download() {
     if try_dl_from_wiki; then
       message "done."
       return 0
-    else
-      message "failed."
     fi
   fi
   error "Failed to download ${FULL_LIBNAME}"
