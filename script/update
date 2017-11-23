@@ -582,12 +582,14 @@ make_gitignore() {
 }
 
 show_diff_prompt() {
+  yn=
   while true; do
     if [[ ($FLAG_SKIP_PROMPT != TRUE) \
             && ($FLAG_NO_GIT != TRUE) \
             && ($FLAG_DRY_RUN != TRUE) ]]; then
       read -p "Above files are modified or added. See changes? [y/N]" yn </dev/tty
-    else
+    fi
+    if [[ -z $yn ]]; then
       yn=n
     fi
     case $yn in
@@ -663,13 +665,15 @@ make_commit_msg() {
 }
 
 do_commit() {
+  yn=
   while true; do
     if [[ ($FLAG_SKIP_PROMPT != TRUE) \
             && ($FLAG_NO_GIT != TRUE) \
             && ($FLAG_DRY_RUN != TRUE) ]]; then
       cat $COMMIT_MSG_TMPL
       read -p "Is it OK to commit with the message above? [y/N]" yn </dev/tty
-    else
+    fi
+    if [[ -z $yn ]]; then
       yn=y
     fi
     local author="$AUTHOR_NAME <$AUTHOR_EMAIL>"
@@ -710,12 +714,14 @@ commit() {
 
 create_tag_prompt() {
   TAGNAME=${GIVEN_TAG:-"v$VERSION"}
+  yn=
   while true; do
     if [[ ($FLAG_SKIP_PROMPT != TRUE) \
             && ($FLAG_NO_GIT != TRUE) \
             && ($FLAG_DRY_RUN != TRUE) ]]; then
       read -p "Do you want to create tag? [y/N]" yn </dev/tty
-    else
+    fi
+    if [[ -z $yn ]]; then
       yn=y
     fi
     case $yn in
