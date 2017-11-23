@@ -642,6 +642,7 @@ make_commit_msg() {
   local tmpfile=$(mktemp)
   CREATED_TMP_FILES=$(append_elem $tmpfile $CREATED_TMP_FILES)
   COMMIT_MSG_TMPL=$tmpfile
+  local history=$(find . -name "HISTORY")
 
   if [[ -n "$GIVEN_COMMIT_MSG" ]]; then
     echo "$GIVEN_COMMIT_MSG" >>$tmpfile
@@ -651,16 +652,16 @@ make_commit_msg() {
   echo "Version $VERSION" >>$tmpfile
   echo "" >>$tmpfile
   if [[ -n $(git branch) ]]; then
-    git diff --unified=0 -- HISTORY \
+    git diff --unified=0 -- $history \
       | grep "^\+[0-9]" \
       | sed "s/^+//g" >>$tmpfile
   else
-    cat HISTORY >>$tmpfile
+    cat $history >>$tmpfile
   fi
 
-  local y="$(head -1 HISTORY | cut -d '.' -f 1)"
-  local m="$(head -1 HISTORY | cut -d '.' -f 2)"
-  local d="$(head -1 HISTORY | cut -d '.' -f 3)"
+  local y="$(head -1 $history | cut -d '.' -f 1)"
+  local m="$(head -1 $history | cut -d '.' -f 2)"
+  local d="$(head -1 $history | cut -d '.' -f 3)"
   COMMIT_DATE=${GIVEN_COMMIT_DATE:-"${y}-${m}-${d}"}
 }
 
