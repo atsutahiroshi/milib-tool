@@ -518,12 +518,12 @@ copy_files() {
 
 get_line_starting_with() {
   local cmd_sed=":x; /\\\\$/ { N; s/\\\\\n//; tx }"
-  local cmd_grep="^$2="
+  local cmd_grep="^$2\s*="
   # echo "sed '$cmd_sed' $1 | grep '$cmd_grep'" >&2
   if [[ $FLAG_DRY_RUN != TRUE ]]; then
-    echo $(sed "$cmd_sed" $1 | grep "$cmd_grep")
+    echo $(sed "$cmd_sed" $1 | grep -e "$cmd_grep")
   else
-    echo "sed '$cmd_sed' $1 | grep '$cmd_grep'"
+    echo "sed '$cmd_sed' $1 | grep -e '$cmd_grep'"
   fi
 }
 
