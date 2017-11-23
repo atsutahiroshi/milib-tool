@@ -586,7 +586,7 @@ show_diff_prompt() {
     if [[ ($FLAG_SKIP_PROMPT != TRUE) \
             && ($FLAG_NO_GIT != TRUE) \
             && ($FLAG_DRY_RUN != TRUE) ]]; then
-      read -p "Above files are modified or added. See changes? [y/N]" yn
+      read -p "Above files are modified or added. See changes? [y/N]" yn </dev/tty
     else
       yn=n
     fi
@@ -668,7 +668,7 @@ do_commit() {
             && ($FLAG_NO_GIT != TRUE) \
             && ($FLAG_DRY_RUN != TRUE) ]]; then
       cat $COMMIT_MSG_TMPL
-      read -p "Is it OK to commit with the message above? [y/N]" yn
+      read -p "Is it OK to commit with the message above? [y/N]" yn </dev/tty
     else
       yn=y
     fi
@@ -714,7 +714,7 @@ create_tag_prompt() {
     if [[ ($FLAG_SKIP_PROMPT != TRUE) \
             && ($FLAG_NO_GIT != TRUE) \
             && ($FLAG_DRY_RUN != TRUE) ]]; then
-      read -p "Do you want to create tag? [y/N]" yn
+      read -p "Do you want to create tag? [y/N]" yn </dev/tty
     else
       yn=y
     fi
