@@ -531,8 +531,6 @@ find_apps() {
   local apps=
   local makefile=$1
   if [[ -f $makefile ]]; then
-    tmp=$(get_line_starting_with $makefile "CONFIGGEN")
-    apps=$(append_elem "${tmp#*=}" $apps)
     tmp=$(get_line_starting_with $makefile "CONFIG")
     apps=$(append_elem "${tmp#*=}" $apps)
     tmp=$(get_line_starting_with $makefile "TARGET")
